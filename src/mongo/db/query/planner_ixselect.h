@@ -54,7 +54,7 @@ public:
      * Find all indices prefixed by fields we have predicates over.  Only these indices are
      * useful in answering the query.
      */
-    static void findRelevantIndices(const unordered_set<std::string>& fields,
+    static void findRelevantIndices(const CanonicalQuery& query,const unordered_set<std::string>& fields,
                                     const std::vector<IndexEntry>& indices,
                                     std::vector<IndexEntry>* out);
 
