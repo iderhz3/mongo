@@ -511,7 +511,7 @@ Status QueryPlanner::plan(const CanonicalQuery& query,
     size_t hintIndexNumber = numeric_limits<size_t>::max();
 
     if (hintIndex.isEmpty()) {
-        QueryPlannerIXSelect::findRelevantIndices(fields, params.indices, &relevantIndices);
+        QueryPlannerIXSelect::findRelevantIndices(query,fields, params.indices, &relevantIndices);
     } else {
         // Sigh.  If the hint is specified it might be using the index name.
         BSONElement firstHintElt = hintIndex.firstElement();
