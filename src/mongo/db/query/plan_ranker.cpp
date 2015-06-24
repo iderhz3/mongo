@@ -54,7 +54,7 @@ namespace {
 bool scoreComparator(const std::pair<double, size_t>& lhs, const std::pair<double, size_t>& rhs) {
     // Just compare score in lhs.first and rhs.first;
     // Ignore candidate array index in lhs.second and rhs.second.
-    return lhs.first > rhs.first;
+    return lhs.first < rhs.first;
 }
 
 }  // namespace
