@@ -31,6 +31,10 @@
 #include "mongo/db/query/planner_ixselect.h"
 
 #include <vector>
+#include <utility>
+#include <algorithm>
+#include <math.h>
+#include <list>
 
 #include "mongo/db/geo/hash.h"
 #include "mongo/db/index_names.h"
@@ -42,7 +46,34 @@
 #include "mongo/db/query/query_planner_common.h"
 #include "mongo/util/log.h"
 
+namespace {
+using std::list;
+    
+    bool weightStatComparator(const std::pair<list<size_t>, size_t>& lhs,
+                         const std::pair<list<size_t>, size_t>& rhs) {
+        list<size_t> lWeightLst=lhs.first;
+	 list<size_t> rWeightLst=rhs.first;
+	 list<size_t>::iterator lIt=lWeightLst.begin();
+	 list<size_t>::iterator rIt=rWeightLst.begin();
+	 while(lIt != lWeightLst.end()&&rIt!=rWeightLst.end())
+	 	{
+	 	if(*lIt != *rIt)
+	 		{
+	 		return *lIt > *rIt;
+	 		}
+		lIt++;
+		rIt++;
+	 	}
+        return  *lIt > *rIt;
+    }
+
+} // namespace
+
 namespace mongo {
+    
+using std::endl;
+using std::vector;
+using std::list;
 
 static double fieldWithDefault(const BSONObj& infoObj, const string& name, double def) {
     BSONElement e = infoObj[name];
@@ -105,18 +136,84 @@ void QueryPlannerIXSelect::getFields(const MatchExpression* node,
 }
 
 // static
-void QueryPlannerIXSelect::findRelevantIndices(const unordered_set<string>& fields,
-                                               const vector<IndexEntry>& allIndices,
-                                               vector<IndexEntry>* out) {
-    for (size_t i = 0; i < allIndices.size(); ++i) {
-        BSONObjIterator it(allIndices[i].keyPattern);
-        verify(it.more());
-        BSONElement elt = it.next();
-        if (fields.end() != fields.find(elt.fieldName())) {
-            out->push_back(allIndices[i]);
+    void QueryPlannerIXSelect::findRelevantIndices(const CanonicalQuery& query,const unordered_set<string>& fields,
+                                                   const vector<IndexEntry>& allIndices,
+                                                   vector<IndexEntry>* out) {
+vector<std::pair<list<size_t>, size_t> > wightsAndCandidateindices;
+		for (size_t i = 0; i < allIndices.size(); ++i) {
+			size_t prefixCounts=0;
+			list<size_t> weightLst;
+            BSONObjIterator it(allIndices[i].keyPattern);
+            while(it.more())
+            	{
+            BSONElement elt = it.next();
+            if (fields.end() != fields.find(elt.fieldName())) {
+			BSONElement elem=query.getParsed().getFilter().getFieldDotted(elt.fieldName());
+			switch(elem.type())
+				{
+				case BSONType::NumberInt:
+			       case BSONType::Timestamp:
+				case BSONType::NumberLong:
+				case BSONType::Date:
+					weightLst.push_back(3);
+					break;
+				case BSONType::NumberDouble:
+					weightLst.push_back(2);
+					break;
+				case BSONType::String:
+				case BSONType::jstOID:
+					weightLst.push_back(1);
+					break;
+				default:
+					weightLst.push_back(0);
+					break;
+				}
+				
+			prefixCounts++;	
+            }
+			else
+				{
+				break;
+				}
+            	}
+		if (!query.getParsed().getSort().isEmpty()&&((size_t)(query.getParsed().getSort().nFields()))<=prefixCounts)
+			{
+			if(query.getParsed().getSort().isPrefixOf(allIndices[i].keyPattern)||query.getParsed().getSort().isPrefixOf(QueryPlannerCommon::reverseSortObj(allIndices[i].keyPattern)))
+				{
+				weightLst.push_front(1);
+				}
+			else
+				{
+				weightLst.push_front(0);
+				}
+			}
+		else
+			{
+			weightLst.push_front(0);
+			}
+		weightLst.push_front(prefixCounts);
+		wightsAndCandidateindices.push_back(std::make_pair(weightLst, i));	
         }
+		if (wightsAndCandidateindices.size() > 1)
+			{
+			std::stable_sort(wightsAndCandidateindices.begin(), wightsAndCandidateindices.end(),
+                         weightStatComparator);
+
+			size_t candidateIndex = wightsAndCandidateindices[0].second;
+			out->push_back(allIndices[candidateIndex]);
+			}
+		else
+			{
+			for (size_t i = 0; i < allIndices.size(); ++i) {
+            BSONObjIterator it(allIndices[i].keyPattern);
+            verify(it.more());
+            BSONElement elt = it.next();
+            if (fields.end() != fields.find(elt.fieldName())) {
+                out->push_back(allIndices[i]);
+            }
+        }
+			}
     }
-}
 
 // static
 bool QueryPlannerIXSelect::compatible(const BSONElement& elt,
