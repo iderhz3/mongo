@@ -248,7 +248,8 @@ double PlanRanker::scoreTree(const PlanStageStats* stats) {
             LOG(5) << "Score boosted to " << score << " due to intersection forcing." << endl;
         }
     }
-
+    double elapsedTimeScore=static_cast<double>(stats->common.executionTimeMillis)/10000000.0;
+    score = baseScore  +elapsedTimeScore;
     return score;
 }
 
