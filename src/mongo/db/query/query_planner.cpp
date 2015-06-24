@@ -810,8 +810,19 @@ Status QueryPlanner::plan(const CanonicalQuery& query,
                 break;
             }
         }
+        
+         bool includeSortFieldsFlag=true;
+         BSONObjIterator it(query.getParsed().getSort());
+         while(it.more())
+         {
+            BSONElement elt = it.next();
+            if (fields.end() == fields.find(elt.fieldName())) {
+                includeSortFieldsFlag=false;
+				break;
+            }
+			}
 
-        if (!usingIndexToSort) {
+        if (!usingIndexToSort&&includeSortFieldsFlag) {
             for (size_t i = 0; i < params.indices.size(); ++i) {
                 const IndexEntry& index = params.indices[i];
                 // Only regular (non-plugin) indexes can be used to provide a sort.
